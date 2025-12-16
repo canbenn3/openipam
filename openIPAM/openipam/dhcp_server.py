@@ -24,10 +24,9 @@ import socket
 
 import base64
 
-from pydhcplib.dhcp_constants import DhcpOptions
+from pydhcplib.pydhcplib.dhcp_constants import DhcpOptions
 
-# FIXME: don't 'import *'
-from pydhcplib import dhcp_packet
+from pydhcplib.pydhcplib import dhcp_packet
 
 # from pydhcplib.dhcp_network import *
 
@@ -48,13 +47,7 @@ from openipam.utilities import error
 from openipam.config import dhcp
 
 import subprocess
-
-try:
-    # python3
-    from queue import Full
-except ImportError:
-    # python2
-    from Queue import Full
+from queue import Full
 
 try:
     import raven
@@ -908,7 +901,8 @@ def db_consumer(dbq, send_packet):
             pkttype, pkt = dbq.get()
             # Handle request
             try:
-                if (time.time() - pkt.last_retry) > REQUEUE_DELAY:
+                last_retry = getattr(pkt, "last_retry", 0)
+                if (time.time() - last_retry) > REQUEUE_DELAY:
                     dhcp_handler.handle_packet(pkt, pkttype=pkttype)
                 else:
                     requeue(pkttype, pkt)

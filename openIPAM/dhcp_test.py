@@ -1,6 +1,7 @@
 #!/usr/bin/python
-import processing
+import multiprocessing as  processing
 from openipam import dhcp_server
+from openipam.config import dhcp
 import random
 import datetime
 
@@ -65,7 +66,7 @@ class PacketGenerator(object):
     def get_gateways(self):
         gateways_q = self.obj.select([self.obj.networks.c.gateway])
         gateways_q = gateways_q.where(
-            self.obj.networks.c.gateway.op("<<")("129.123.0.0/16")
+            self.obj.networks.c.gateway.op("<<")(dhcp.server_subnet)
         )
         return self.__db._execute(gateways_q)
 
@@ -148,7 +149,7 @@ def breakmac(m):
 
 
 def make_dhcp_packet(mac, requested, gateway, discover=False, bound=True):
-    packet = dhcp_server.DhcpPacket()
+    packet = dhcp_server.dhcp_packet.DhcpPacket()
     if discover or not bound:
         type = 1
         packet.SetOption("request_ip_address", requested.split("."))

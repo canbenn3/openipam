@@ -5,13 +5,14 @@ TABLE_LOG=1
 
 DBNAME=$1
 
-USER=openipam_user
+USER=postgres
 
 [ -z $DBNAME ] && echo "usage: $0 db_name" && exit 1
 
 echo "drop database $DBNAME; CREATE DATABASE $DBNAME; GRANT ALL ON DATABASE $DBNAME to $USER;" | sudo -u postgres psql
 
-psql -U $USER -d $DBNAME -f $SDIR/dhcp_dns_schema.sql &> tmpoutput.create
+psql -U $USER -d $DBNAME -f $SDIR/dns_schema.sql &> tmpoutput.create
+psql -U $USER -d $DBNAME -f $SDIR/openipam_schema.sql 2>&1 >> tmpoutput.create
 psql -U $USER -d $DBNAME -f $SDIR/perms.sql 2>&1 >> tmpoutput.create
 cat tmpoutput.create | grep -v "NOTICE\|CREATE\|INSERT"
 

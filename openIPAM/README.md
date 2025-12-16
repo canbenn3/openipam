@@ -30,3 +30,4 @@ DEPENDENCIES
 	hacked version of pydhcplib (included in source tree)
 
 .
+To install dependencies, run `python3 -m pip3 install -r requirements.txt` in the terminal from the root directory
