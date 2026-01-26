@@ -2288,7 +2288,7 @@ class DBInterface(DBBaseInterface):
 
     def _do_update(self, table, where, values):
         self._audit_vals(table, values)
-        return self._execute_set(table.update(values=values).where(where))
+        return self._execute_set(table.update().where(where).values(values))
 
     def _do_delete(self, table, where):
         if where is None or where is True or where == "":
@@ -5103,7 +5103,7 @@ class DBDHCPInterface(DBInterface):
                 for d in data:
                     print("\t%s" % d)
 
-            q = obj.leases.delete(del_cond)
+            q = obj.leases.delete().where(del_cond)
             self._execute_set(q)
 
             sel_cols = [
@@ -5144,13 +5144,14 @@ class DBDHCPInterface(DBInterface):
                         )
                     self._commit()
                     return result
-                query = obj.leases.update(
+                query = obj.leases.update().where(
                     and_(
                         obj.leases.c.mac == mac,
                         obj.leases.c.starts < ago(min_lease_age),
                         obj.leases.c.address == address,
                     ),
-                    values={"server": values["server"], "ends": values["ends"]},
+                ).values(
+                    **{"server": values["server"], "ends": values["ends"]},
                 )
                 result = self._execute_set(query)
             else:
@@ -5471,7 +5472,7 @@ class DBDHCPInterface(DBInterface):
                     and not discover
                 ):
                     # Lease accepted by client -- update the DNS records
-                    q = obj.dhcp_dns_records.delete(
+                    q = obj.dhcp_dns_records.delete().where(
                         or_(
                             and_(
                                 obj.dhcp_dns_records.c.ip_content == address.address,
@@ -5639,7 +5640,7 @@ class DBDHCPInterface(DBInterface):
             "starts": sqlalchemy.sql.func.now(),
             "ends": sqlalchemy.sql.func.now() + text("interval '3600 s'"),
         }
-        self._execute_set(obj.leases.update(whereclause, values=values))
+        self._execute_set(obj.leases.update().where(whereclause).values(values))
 
     def retrieve_dhcp_options(self, mac, address, option_ids):
         """return a list of DHCP options"""
@@ -5760,8 +5761,8 @@ def int_to_bytes(num, len=4):
 
 def make_lease_dict(address, lease_time, hostname):
     ret = {}
-    ret["address"] = address["address"]
-    ret["router"] = address["gateway"]
+    ret["address"] = address.address
+    ret["router"] = address.gateway
     ret["netmask"] = str(openipam.iptypes.IP(address.network).netmask())  # FIXME
     ret["broadcast"] = str(openipam.iptypes.IP(address.network).broadcast())  # FIXME
     ret["lease_time"] = lease_time
