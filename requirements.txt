@@ -3,13 +3,13 @@
 # Core
 CherryPy==3.2.6
 sqlalchemy==2.0.45
-psycopg2==2.7.7
+psycopg2-binary>=2.9.9
 python-ldap==3.1.0
 pyOpenSSL==19.1.0
 
 # Serialization / Utilities
-IPy==0.83
-Cheetah3>=3.2.6.post2
+IPy==1.0
+Cheetah3>=3.2.7b1
 
 # Optional or built-in replacements
 # python-processing  # built-in for Python >=2.6

@@ -165,11 +165,11 @@ class Server:
                 bsocket_info = s.copy()
                 bsocket_info["unicast"] = False
                 bsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                bsocket.setsockopt(
-                    socket.SOL_SOCKET,
-                    SO_BINDTODEVICE,
-                    bsocket_info["interface"].encode("ascii"),
-                )
+                # bsocket.setsockopt(
+                #     socket.SOL_SOCKET,
+                #     SO_BINDTODEVICE,
+                #     bsocket_info["interface"].encode("ascii"),
+                # )
                 bsocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 bsocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 bsocket.bind((self.listen_bcast, self.listen_port))
@@ -179,11 +179,11 @@ class Server:
                 usocket_info = s.copy()
                 usocket_info["broadcast"] = False
                 usocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                usocket.setsockopt(
-                    socket.SOL_SOCKET,
-                    SO_BINDTODEVICE,
-                    usocket_info["interface"].encode("ascii"),
-                )
+                # usocket.setsockopt(
+                #     socket.SOL_SOCKET,
+                #     SO_BINDTODEVICE,
+                #     usocket_info["interface"].encode("ascii"),
+                # )
                 usocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 usocket.bind((usocket_info["address"], self.listen_port))
                 self.dhcp_sockets.append(usocket)
@@ -204,7 +204,7 @@ class Server:
         except Exception as e:
             print_exception(e)
             b64_data = base64.b64encode(data)
-            print("FAILED TO PARSE: %r: %r" % (e, b64_data))
+            print(f"FAILED TO PARSE: {e!r}: {b64_data!r}")
             dhcp.get_logger().log(dhcp.logging.ERROR, "IGN/UNPARSABLE: %r" % b64_data)
 
             if raven_client:
@@ -450,13 +450,13 @@ def log_packet(packet, prefix="", level=dhcp.logging.INFO, raw=False):
     t_name = types[pkttype] if pkttype in types else "INVALID"
 
     if giaddr != "0.0.0.0":
-        client_foo = "%s via %s" % (client, giaddr)
+        client_foo = f"{client} via {giaddr}"
     else:
         client_foo = str(client)
 
     if packet.IsOption("host_name"):
         host_name = packet.GetOption("host_name")
-        client_foo = "%s [option 12: %s]" % (client_foo, "".join(map(chr, host_name)))
+        client_foo = "{} [option 12: {}]".format(client_foo, "".join(map(chr, host_name)))
 
     raw_append = ""
     if raw:
@@ -487,7 +487,7 @@ def log_packet(packet, prefix="", level=dhcp.logging.INFO, raw=False):
         elif t_name == "decline":
             message = "dhcpdecline from host %s" % mac
         else:
-            message = "%s %s from %s" % (prefix, t_name.upper(), mac)
+            message = f"{prefix} {t_name.upper()} from {mac}"
 
         requested_ip = bytes_to_ip(packet, "request_ip_address")
 
@@ -625,7 +625,7 @@ def db_consumer(dbq, send_packet):
                 opt = DhcpRevOptions[i]
                 v = opt_vals[i]
                 v_int = bytes_to_ints(v)
-                print("Setting %s(%r) to '%s'" % (opt, i, v_int))
+                print(f"Setting {opt}({i!r}) to '{v_int}'")
                 packet.SetOption(opt, v_int)
 
                 if i in (150, "tftp_server_address"):
@@ -798,7 +798,7 @@ def db_consumer(dbq, send_packet):
 
             # giaddr = ".".join(map(str, packet.GetOption("giaddr")))
 
-            print("mac: %s, requested address: %s" % (mac, requested_ip))
+            print(f"mac: {mac}, requested address: {requested_ip}")
             # make sure a valid lease exists
 
             try:

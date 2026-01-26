@@ -17,7 +17,7 @@ def get_rand_item(lst):
     return item
 
 
-class PacketGenerator(object):
+class PacketGenerator:
     def __init__(self, sendq):
         # ie. send to backend
         self.sendq = sendq
@@ -57,11 +57,7 @@ class PacketGenerator(object):
         return self.__db._execute(dynamics_q)
 
     def get_random_mac(self):
-        return "aa:aa:aa:%2x:%2x:%2x" % (
-            random.randrange(0, 256),
-            random.randrange(0, 256),
-            random.randrange(0, 256),
-        )
+        return f"aa:aa:aa:{random.randrange(0, 256):2x}:{random.randrange(0, 256):2x}:{random.randrange(0, 256):2x}"
 
     def get_gateways(self):
         gateways_q = self.obj.select([self.obj.networks.c.gateway])
@@ -206,4 +202,4 @@ if __name__ == "__main__":
     end = datetime.datetime.now()
     print("ending at %s" % end)
     duration = end - start
-    print("requests: %s duration: %s" % (nreq, duration))
+    print(f"requests: {nreq} duration: {duration}")
