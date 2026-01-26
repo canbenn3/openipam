@@ -89,53 +89,55 @@ class DBBaseInterface:
         """
         Create a transactional connection and begin the transaction
         """
-
-        # FIXME: this is not thread-safe
-
-        # If we already have a connection, don't create another one
-        # This should make nested transactions work properly
-        # See: http://www.sqlalchemy.org/docs/05/dbengine.html#dbengine_transactions
+        # 1. Ensure we have a connection
         if not hasattr(self, "_conn"):
-            # Initial creation of connection and transaction stack
             self._conn = self._create_conn()
-            self._trans_stack = [self._conn.begin()]
+            self._trans_stack = []
 
+        # 2. Decide: Root Transaction or Nested Savepoint?
+        # In SQLAlchemy 2.0, connection.begin() fails if a transaction is already active.
+        # We must use begin_nested() (SAVEPOINT) if we are already inside one.
         if self._conn.in_transaction():
             self._trans_stack.append(self._conn.begin_nested())
         else:
-            # We already have a connection, so we're already in a transaction
-            # Add the next transaction object to the transaction stack
             self._trans_stack.append(self._conn.begin())
 
     def _commit(self):
         """
-        Commits and closes the connection to return it to the pool.
+        Commits the top transaction/savepoint. 
+        If it's the root transaction, closes the connection.
         """
-
         # Pop the transaction object from the stack and commit it
-        self._trans_stack.pop().commit()
+        if hasattr(self, "_trans_stack") and self._trans_stack:
+            trans = self._trans_stack.pop()
+            trans.commit()
 
-        if not self._trans_stack:
-            # We've committed the root transaction object, we're done!
-            self._conn.close()
-
-            del self._conn
-            del self._trans_stack
+            # If the stack is empty, we are done with the session
+            if not self._trans_stack:
+                if hasattr(self, "_conn"):
+                    self._conn.close()
+                    del self._conn
+                del self._trans_stack
 
     def _rollback(self):
         """
-        Rollback the transactional connection.
+        Rollback the transactional connection (Hard Reset).
         """
-
-        # Make sure that the objects exist on self before rolling back.
-        # This is done for nested transactions where an inner transaction may
-        # call this function and already kill the objects, but the outer transaction
-        # will then also call this function
+        # Rollback all transactions in REVERSE order (LIFO).
+        # This prevents the "nested transaction already deassociated" warning
+        # because we rollback the child (Savepoint) before the parent (Root).
         if hasattr(self, "_trans_stack"):
-            for trans in self._trans_stack:
-                trans.rollback()
+            # Iterate backwards to safely unwind savepoints then root
+            for trans in reversed(self._trans_stack):
+                try:
+                    trans.rollback()
+                except Exception:
+                    # If the transaction is already inactive/invalid, just ignore it
+                    # since we are destroying the connection anyway.
+                    pass
             del self._trans_stack
 
+        # Close and destroy the connection
         if hasattr(self, "_conn"):
             self._conn.close()
             del self._conn
@@ -2284,7 +2286,7 @@ class DBInterface(DBBaseInterface):
 
     def _do_insert(self, table, values):
         self._audit_vals(table, values)
-        return self._execute_set(table.insert(values=values))
+        return self._execute_set(table.insert().values(values))
 
     def _do_update(self, table, where, values):
         self._audit_vals(table, values)
@@ -5163,7 +5165,7 @@ class DBDHCPInterface(DBInterface):
                     print(datetime.datetime.now())
                 values["mac"] = mac
                 values["starts"] = sqlalchemy.sql.func.now()
-                query = obj.leases.insert(values=values)
+                query = obj.leases.insert().values(values)
                 result = self._execute_set(query)
 
             self._commit()
@@ -5744,9 +5746,7 @@ class DBDHCPInterface(DBInterface):
 
         did = domains[0].id
 
-        query = obj.dhcp_dns_records.insert(
-            values={"did": did, "name": name, "ip_content": ip_content, "ttl": ttl}
-        )
+        query = obj.dhcp_dns_records.insert().values(**{"did": did, "name": name, "ip_content": ip_content, "ttl": ttl})
 
         return self._execute_set(query)
 
