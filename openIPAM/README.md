@@ -1,3 +1,4 @@
+```
                         ___ ____   _    __  __ 
   ___  _ __   ___ _ __ |_ _|  _ \ / \  |  \/  |
  / _ \| '_ \ / _ \ '_ \ | || |_) / _ \ | |\/| |
@@ -5,29 +6,58 @@
  \___/| .__/ \___|_| |_|___|_| /_/   \_\_|  |_|
       |_|
                www.openipam.org                      
-
+```
 
 Copyright (C) 2007-2008 Utah State University - Information Technology
 Licensed under the GNU General Public License v3. See COPYING for details.
 
+# MACHINE SETUP
 
-INSTALLATION & CUSTOMIZATION
-	http://code.google.com/p/openipam/wiki/Installation
-	http://code.google.com/p/openipam/wiki/DeveloperDocumentation
+## Prerequisites
+- python3.12 
+- pip3
+- libldap2-dev
+- libsasl2-dev
+- libpq-dev
+- postgresql
 
-DEPENDENCIES
-	Power DNS server
-	PostgreSQL server (with table_log if you want to keep track of changes)
-	python-ldap (>= 2.2.0) *
-	python-cherrypy3 (>= 3.0.3) (backend/web frontend)
-	python-cjson (backend/web frontend)
-	python-sqlalchemy (>= 0.4.6) (backend, dhcp)
-	python-psycopg2 (backend, dhcp)
-	python-openssl *
-	python-ipy
-	python-processing (for DHCP server)
-	python-cheetah (for web frontend)
-	hacked version of pydhcplib (included in source tree)
 
-.
-To install dependencies, run `python3 -m pip3 install -r requirements.txt` in the terminal from the root directory
+## Setup
+To install dependencies, run `python3 -m pip install -r requirements.txt` in the terminal from the root directory
+
+Now we need to set up the configuration for the server. Run `cp openIPAM/openipam_config.example openIPAM/openipam_config`. Adjust the settings for `auth`, `backend`, and `dhcp` python files. Make sure that `server_listen` and `server_subnet` are both correct in the `dhcp` file (`server_subnet` is used for the test file, not the actual code, so it isn't essential unless you run the test).
+
+In order to be able to bind to port 67, we need to grant the program access. There are three methods to do this:
+- Run the program as sudo
+- grant capabilities via `setcap`
+- Using `authbind`
+
+We'll show how to run it using Authbind, though the other methods should work:
+```bash
+sudo apt install authbind
+sudo touch /etc/authbind/byport/67
+sudo chmod 777 /etc/authbind/byport/67
+# Run the command via authbind (allows python to access port 67)
+authbind --deep python3 openIPAM/openipam_dhcpd.py
+```
+
+
+## Historical Dependencies (Reference Only)
+
+INSTALLATION & CUSTOMIZATION (LEGACY)
+- http://code.google.com/p/openipam/wiki/Installation
+- http://code.google.com/p/openipam/wiki/DeveloperDocumentation
+
+DEPENDENCIES (LEGACY)
+- Power DNS server
+- PostgreSQL server (with table_log if you want to keep track of changes)
+- python-ldap (>= 2.2.0) *
+- python-cherrypy3 (>= 3.0.3) (backend/web frontend)
+- python-cjson (backend/web frontend)
+- python-sqlalchemy (>= 0.4.6) (backend, dhcp)
+- python-psycopg2 (backend, dhcp)
+- python-openssl *
+- python-ipy
+- python-processing (for DHCP server)
+- python-cheetah (for web frontend)
+- hacked version of pydhcplib (included in source tree)
