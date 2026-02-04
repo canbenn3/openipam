@@ -18,12 +18,11 @@ Licensed under the GNU General Public License v3. See COPYING for details.
 - pip3
 - libldap2-dev
 - libsasl2-dev
-- libpq-dev
 - postgresql
 
 
 ## Setup
-To install dependencies, run `python3 -m pip install -r requirements.txt` in the terminal from the root directory
+To install dependencies, run `python3 -m pip install -r requirements.txt` in the terminal from the root directory. You may need to create a virtual environment for whichever version of python you're using (>3.12). If so, run `python3 -m venv .venv && source .venv/bin/activate`, then install the dependencies in your activated virtual environment. All python commands need to be run in this environment for the server to work.
 
 Now we need to set up the configuration for the server. Run `cp openIPAM/openipam_config.example openIPAM/openipam_config`. Adjust the settings for `auth`, `backend`, and `dhcp` python files. Make sure that `server_listen` and `server_subnet` are both correct in the `dhcp` file (`server_subnet` is used for the test file, not the actual code, so it isn't essential unless you run the test).
 
@@ -40,6 +39,8 @@ sudo chmod 777 /etc/authbind/byport/67
 # Run the command via authbind (allows python to access port 67)
 authbind --deep python3 openIPAM/openipam_dhcpd.py
 ```
+
+The DHCP Server should now be up and running correctly.
 
 
 ## Historical Dependencies (Reference Only)
