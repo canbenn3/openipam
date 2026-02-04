@@ -527,7 +527,6 @@ class DBBaseInterface:
             (obj.addresses.c.address != SQLNULL).label("is_static"),
             text("hosts.expires::DATE - NOW()::date AS days"),
         )
-        # query = select(columns, from_obj=from_object).distinct()
         query = select(*columns).select_from(from_object).where(
             (obj.hosts.c.expires - obj.notifications.c.notification)
             <= sqlalchemy.sql.func.now()
@@ -743,12 +742,12 @@ class DBBaseInterface:
             else:
                 raise Exception("Invalid type for id: %s" % type(id))
         if address:
-            if type(address) == list:
+            if type(address) is list:
                 whereclause.append(obj.dns_records.c.ip_content.in_(address))
             else:
                 whereclause.append(obj.dns_records.c.ip_content == address)
         if tid:
-            if type(tid) == list:
+            if type(tid) is list:
                 whereclause.append(obj.dns_records.c.tid.in_(tid))
             else:
                 whereclause.append(obj.dns_records.c.tid == tid)
@@ -757,7 +756,7 @@ class DBBaseInterface:
                 obj.dns_records.c.tid == self.get_dns_types(typename=typename)[0].id
             )
         if name:
-            if type(name) == list:
+            if type(name) is list:
                 whereclause.append(obj.dns_records.c.name.in_(name))
             else:
                 name = name.lower()
@@ -772,7 +771,7 @@ class DBBaseInterface:
 
         if content:
             # FIXME: is there a better way to do this?
-            if type(content) == list:
+            if type(content) is list:
                 if validation.is_ip(content[0]):
                     raise error.InvalidArgument(
                         "Addresses are not valid in 'content' field (searching for %s)"
@@ -1253,7 +1252,7 @@ class DBBaseInterface:
 
         # Apply all the filtering that was specified
         if ip is not None:
-            if type(ip) == list:
+            if type(ip) is list:
                 whereclause.append(
                     or_(obj.addresses.c.address.in_(ip), obj.leases.c.address.in_(ip))
                 )
@@ -1444,7 +1443,7 @@ class DBBaseInterface:
         else:
             whereclause = True
 
-        if type(hosts) == list:
+        if type(hosts) is list:
             if backend.enable_gul:
                 newhosts = []
                 for i in hosts:
@@ -2135,9 +2134,9 @@ class DBBaseInterface:
         if not backend.enable_gul:
             raise Exception("GUL functionality is disabled in backend config")
 
-        if type(address) == list:
+        if type(address) is list:
             where = obj.gul_recent_arp_byaddress.c.address.in_(address)
-        elif type(address) == str:
+        elif type(address) is str:
             where = obj.gul_recent_arp_byaddress.c.address == address
         else:
             raise error.InvalidArgument(
@@ -3153,7 +3152,7 @@ class DBInterface(DBBaseInterface):
         if address and network:
             if address.version() != network.version():
                 raise Exception(f"address family mismatch: {address}, {network}")
-            if not (address in network):
+            if address not in network:
                 raise error.InvalidArgument(
                     f"address {address} does not belong to network {network}"
                 )
@@ -4186,7 +4185,7 @@ class DBInterface(DBBaseInterface):
         where = None
 
         if id:
-            if type(id) == list:
+            if type(id) is list:
                 where = obj.notifications_to_hosts.c.id.in_(id)
             else:
                 where = obj.notifications_to_hosts.c.id == id
@@ -5199,8 +5198,6 @@ class DBDHCPInterface(DBInterface):
             ),
         )
 
-        # 1. Pass column directly (no brackets)
-        # 2. Use .select_from() instead of from_obj=
         net_query = select(obj.networks.c.network).select_from(network_join)
         networks = []
         for i in self._execute(net_query):

@@ -1,5 +1,3 @@
-# === Legacy OpenIPAM DHCP dependencies ===
-
 # Core
 CherryPy==3.2.6
 sqlalchemy==2.0.45
@@ -14,6 +12,3 @@ Cheetah3>=3.2.7b1
 # Optional or built-in replacements
 # python-processing  # built-in for Python >=2.6
 # pydhcplib is included in source tree
-
-# Optional newer substitutes (if python-cjson fails)
-# simplejson==3.17.0

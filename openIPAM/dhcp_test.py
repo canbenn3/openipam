@@ -34,7 +34,6 @@ class PacketGenerator:
         self.statics = self.__get_statics()
         self.dynamics = self.__get_dynamics()
         
-        # FIX: Access .mac as an attribute of the Row object
         self.dynamic_macs = [d.mac for d in self.dynamics]
         
         self.leased_dynamics = []
@@ -42,7 +41,6 @@ class PacketGenerator:
         self.gateways = self.get_gateways()
 
     def __get_statics(self):
-        # SQLAlchemy 2.0 select syntax
         statics_q = (
             select(self.obj.addresses, self.obj.networks.c.gateway)
             .select_from(
@@ -60,7 +58,6 @@ class PacketGenerator:
         return self.__db._execute(dynamics_q)
 
     def get_random_mac(self):
-        # Corrected padding to :02x to prevent empty spaces in MACs
         return f"aa:aa:aa:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}"
 
     def get_gateways(self):
@@ -110,7 +107,6 @@ class PacketGenerator:
             info["gateway"] = info["address"]  
         elif dynamic and discover:
             info = get_rand_item(self.dynamics)
-            # FIX: Access .gateway as an attribute
             info["gateway"] = get_rand_item(self.gateways)["gateway"]
         elif dynamic:
             info = get_rand_item(self.leased_dynamics)
