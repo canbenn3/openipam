@@ -208,32 +208,10 @@ class DBBaseInterface:
         if order_by:
             query = query.order_by(order_by)
         if count:
-            # FIXME: this is a bit inefficient... but I can't figure out another way
-            # that will handle DISTINCT and other complex queries
-            
-            # 1. Create the subquery (alias() is deprecated for Selects, use subquery())
             subq = query.subquery("countfoo")
-            
-            # 2. Pass column as arg, use select_from() for the source
             count_stmt = select(sqlalchemy.sql.func.count("*").label("count")).select_from(subq)
-
             result = self._execute(count_stmt)
-            
-            # 3. Use scalar() to get the first column of the first row
             count = result.scalar() or 0
-        # if count:
-        #     # FIXME: this is a bit inefficient... but I can't figure out another way
-        #     # that will handle DISTINCT and other complex queries
-        #     count = select(
-        #         columns=[sqlalchemy.sql.func.count("*").label("count")],
-        #         from_obj=query.alias("countfoo"),
-        #     )
-
-        #     count = self._execute(count)
-        #     if count:
-        #         count = count[0]["count"]
-        #     else:
-        #         count = 0
 
         if page and limit:
             query = self.__do_page(query=query, page=page, limit=limit)

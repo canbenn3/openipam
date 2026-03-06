@@ -8,16 +8,18 @@ from sqlalchemy import select
 
 from queue import Empty
 
+
 def get_rand_item(lst):
     # Standard Row objects support attribute access
     rp = lst[random.randrange(0, len(lst))]
     item = {"address": None}
-    
+
     # We use getattr because it's safer when working with a dynamic list of keys
     for i in ["mac", "address", "gateway"]:
         if hasattr(rp, i):
             item[i] = getattr(rp, i)
     return item
+
 
 class PacketGenerator:
     def __init__(self, sendq):
@@ -27,15 +29,16 @@ class PacketGenerator:
 
     def connect(self):
         from openipam.backend.db import obj
+
         self.obj = obj
         from openipam.backend.db import interface
 
         self.__db = interface.DBBackendInterface()
         self.statics = self.__get_statics()
         self.dynamics = self.__get_dynamics()
-        
+
         self.dynamic_macs = [d.mac for d in self.dynamics]
-        
+
         self.leased_dynamics = []
         self.leased_unregistered = []
         self.gateways = self.get_gateways()
@@ -60,11 +63,12 @@ class PacketGenerator:
     def get_random_mac(self):
         return f"aa:aa:aa:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}"
 
-    def get_gateways(self):
-        gateways_q = (
-            select(self.obj.networks.c.gateway)
-            .where(self.obj.networks.c.gateway.op("<<")(dhcp.server_subnet))
-        )
+    def get_gateways(self, local_gateways_only=False):
+        gateways_q = select(self.obj.networks.c.gateway)
+        if local_gateways_only:
+            gateways_q = gateways_q.where(
+                self.obj.networks.c.gateway.op("<<")(dhcp.server_subnet)
+            )
         return self.__db._execute(gateways_q)
 
     def send_packet(self, packet, send_to=None, bootp=None):
@@ -102,31 +106,30 @@ class PacketGenerator:
         discover = (random.random() < 0.25) or (len(self.leased_dynamics) < 100)
         bound = random.random() < 0.75
 
+        selected_gateway = get_rand_item(self.gateways)["gateway"]
+
         if static:
             info = get_rand_item(self.statics)
-            info["gateway"] = info["address"]  
         elif dynamic and discover:
             info = get_rand_item(self.dynamics)
-            info["gateway"] = get_rand_item(self.gateways)["gateway"]
         elif dynamic:
             info = get_rand_item(self.leased_dynamics)
         elif unregistered and discover:
             info = {"mac": self.get_random_mac(), "address": None}
-            info["gateway"] = get_rand_item(self.gateways)["gateway"]
         else:
             info = get_rand_item(self.leased_unregistered)
 
         address = info["address"]
         mac = info["mac"]
-        gateway = info["gateway"]
 
         if not address:
             address = "10.0.0.1"
 
         msg_type, packet = make_dhcp_packet(
-            discover=discover, requested=address, bound=bound, mac=mac, gateway=gateway
+            discover=discover, requested=address, bound=bound, mac=mac, gateway=selected_gateway
         )
         self.sendq.put((msg_type, packet))
+
 
 def hex2int(s):
     return int(s.strip(), 16)
@@ -145,7 +148,7 @@ def make_dhcp_packet(mac, requested, gateway, discover=False, bound=True):
         "address": "192.168.56.3",
         "broadcast": "192.168.56.255",
         "interface": "eth0",
-        "unicast": True    
+        "unicast": True,
     }
     packet.retry_count = 0
     packet.set_recv_interface(mock_interface)
