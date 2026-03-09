@@ -81,8 +81,8 @@ notifications_to_hosts = Table("notifications_to_hosts", meta, autoload_with=eng
 disabled = Table("disabled", meta, autoload_with=engine)
 
 if backend.enable_gul:
-    gul_recent_arp_byaddress = Table("gul_recent_arp_byaddress", meta, autoload_with=engine)
-    gul_recent_arp_bymac = Table("gul_recent_arp_bymac", meta, autoload_with=engine)
+    gul_recent_arp_byaddress = Table("gul4_recent_arp_byaddress", meta, autoload_with=engine)
+    gul_recent_arp_bymac = Table("gul4_recent_arp_bymac", meta, autoload_with=engine)
 
 
 def perm_query(
