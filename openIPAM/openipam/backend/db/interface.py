@@ -19,19 +19,15 @@ from openipam.utilities.perms import Perms
 from openipam.config import backend
 
 from sqlalchemy.sql import select, and_, or_, not_, text, union
-
+from sqlalchemy.exc import IntegrityError
 import openipam.utilities.perms
+from openipam.utilities.error import DHCPRetryError
 
 from openipam.utilities.function_wrapper import fcn_wrapper
 
 import random
 
 random.seed()
-
-
-class DHCPRetryError(Exception):
-    pass
-
 
 my_conn = obj.engine.connect()
 query = select(obj.permissions.c.id, obj.permissions.c.name)
@@ -4413,7 +4409,7 @@ class DBInterface(DBBaseInterface):
                     raise error.NotImplemented(
                         "Host has multiple addresses or inconsistent data.  Delete and "
                         "re-create it to convert to dynamic. addresses: %s"
-                        % ", ".join([a["address"] for a in former_addresses])
+                        % ", ".join([a.address for a in former_addresses])
                     )
                 former_address = openipam.iptypes.IP(former_addresses[0].address)
                 dns_records = self.get_dns_records(mac=old_host.mac)
@@ -5251,6 +5247,11 @@ class DBDHCPInterface(DBInterface):
         try:
             lease = self._make_dhcp_lease(*args, **kw)
             self._commit()
+        except IntegrityError as e:
+            # 2+ proceses may claim an address in transaction that error on the commit. Retry when this happens
+            self._rollback()
+            print("Database collision detected, requesting retry: %r" % e)
+            raise DHCPRetryError("Lease table collision")
         except Exception as e:
             self._rollback()
             print("Error in _make_dhcp_lease: %r" % e)

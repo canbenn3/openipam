@@ -120,3 +120,7 @@ class InvalidCIDRNetwork(BaseException):
     """Raised for an invalid CIDR network description"""
 
     pass
+
+
+class DHCPRetryError(Exception):
+    pass

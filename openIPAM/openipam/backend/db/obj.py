@@ -172,7 +172,7 @@ def perm_query(
         whereclause = and_(whereclause, andwhere)
 
     if do_subquery:
-        query = subquery("perms", columns, whereclause, from_obj=fromclause)
+        query = Subquery("perms", columns, whereclause, from_obj=fromclause)
     else:
         query = select(columns, whereclause, from_obj=fromclause)
 

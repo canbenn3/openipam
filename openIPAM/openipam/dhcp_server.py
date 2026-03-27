@@ -18,7 +18,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 import os
-
 import select
 import socket
 
@@ -48,9 +47,10 @@ from openipam.config import dhcp
 
 import subprocess
 from queue import Full
+from openipam.utilities.error import DHCPRetryError
 
 try:
-    import raven
+    import raven # type: ignore
 except ImportError:
     raven = None
 
@@ -111,7 +111,8 @@ def int_to_4_bytes(num):
 
 
 def ip_to_list(address):
-    return list(map(int, address.split(".")))
+    clean_address = str(address).split("/")[0]
+    return list(map(int, clean_address.split(".")))
 
 
 def bytes_to_ints(bytes):
@@ -456,7 +457,9 @@ def log_packet(packet, prefix="", level=dhcp.logging.INFO, raw=False):
 
     if packet.IsOption("host_name"):
         host_name = packet.GetOption("host_name")
-        client_foo = "{} [option 12: {}]".format(client_foo, "".join(map(chr, host_name)))
+        client_foo = "{} [option 12: {}]".format(
+            client_foo, "".join(map(chr, host_name))
+        )
 
     raw_append = ""
     if raw:
@@ -509,13 +512,16 @@ def log_packet(packet, prefix="", level=dhcp.logging.INFO, raw=False):
         )
 
 
-def db_consumer(dbq, send_packet):
+def db_consumer(dbq, send_packet, db_instance=None, production=True):
     class dhcp_packet_handler:
         # Order matters here.  We want type_map[1] == discover, etc
-        def __init__(self, send_packet):
-            from openipam.backend.db import interface
+        def __init__(self, send_packet, db_instance=None, production=True):
+            if db_instance:
+                self.__db = db_instance
+            else:
+                from openipam.backend.db import interface
 
-            self.__db = interface.DBDHCPInterface()
+                self.__db = interface.DBDHCPInterface()
             self.SendPacket = send_packet
             # Map our functions to DHCP types
             self.type_map = [
@@ -545,6 +551,8 @@ def db_consumer(dbq, send_packet):
                 print("#############################")
 
             if action:
+                if not production:
+                    print(f"action: {action.__name__}")
                 action(packet)
             else:
                 print("Don't know how to handle %s packet" % tname)
@@ -600,12 +608,12 @@ def db_consumer(dbq, send_packet):
         def assign_dhcp_options(self, options, requested, packet):
             opt_vals = {}
             for o in options:
-                if o["value"] is None:  # unset this option, plz
-                    packet.DeleteOption(DhcpRevOptions[o["oid"]])
-                    if int(o["oid"]) in opt_vals:
-                        del opt_vals[int(o["oid"])]
+                if o.value is None:  # unset this option, plz
+                    packet.DeleteOption(DhcpRevOptions[o.oid])
+                    if int(o.oid) in opt_vals:
+                        del opt_vals[int(o.oid)]
                 else:
-                    opt_vals[int(o["oid"])] = o["value"]
+                    opt_vals[int(o.oid)] = o.value
 
             preferred = []
             for oid in requested:
@@ -869,16 +877,74 @@ def db_consumer(dbq, send_packet):
                 "######################################################################"
             )
 
-    dhcp_handler = dhcp_packet_handler(send_packet)
+        def process_pkt(self):
+            pkttype = None
+            pkt = None
+            try:
+                pkttype, pkt = dbq.get()
+                # Handle request
+                try:
+                    last_retry = getattr(pkt, "last_retry", 0)
+                    if (time.time() - last_retry) > REQUEUE_DELAY:
+                        dhcp_handler.handle_packet(pkt, pkttype=pkttype)
+                    else:
+                        requeue(pkttype, pkt)
+                except DHCPRetryError as e:
+                    pkt.retry_count += 1
 
-    # my_logfile = '/var/log/dhcp/dhcp_server_worker.%s' % os.getpid()
-    # logfile = open( my_logfile, 'a' )
-    # logfile.write('Starting worker process.\n')
-    # os.dup2( logfile.fileno(), sys.stdout.fileno() )
+                    if pkt.retry_count <= REQUEUE_MAX:
+                        pkt.last_retry = time.time()
+                        # if queue is full, we probably want to ignore this packet anyway
+                        print("re-queueing packet for retry: %r" % e)
+                        if requeue(pkttype, pkt):
+                            log_packet(
+                                pkt, prefix="IGN/REQUEUE:", level=dhcp.logging.WARNING
+                            )
+                    else:
+                        print("dropping packet after too many retries: %r" % e)
+                        log_packet(pkt, prefix="IGN/TOOMANY:", level=dhcp.logging.ERROR)
 
-    # FIXME: don't create sqlalchemy db connection foo at global module level so we
-    # don't have to hack like this
-    from openipam.backend.db import interface
+            except error.NotFound as e:
+                # print_exception( e, traceback=False )
+                print("sorry, no lease found")
+                log_packet(pkt, prefix="IGN/UNAVAIL:", level=dhcp.logging.ERROR)
+                print(str(e))
+            except Exception as e:
+                print_exception(e)
+                if raven_client:
+                    try:
+                        pkttype, mac, xid, client, giaddr, recvd_from, req_opts = (
+                            None,
+                        ) * 7
+                        if pkt is not None:
+                            (
+                                pkttype,
+                                mac,
+                                xid,
+                                client,
+                                giaddr,
+                                recvd_from,
+                                req_opts,
+                            ) = parse_packet(pkt)
+                        raven_client.captureException(
+                            data={
+                                "extra": {
+                                    "mac": mac,
+                                    "pkttype": pkttype,
+                                    "xid": xid,
+                                    "client": client,
+                                    "giaddr": giaddr,
+                                    "recvd_from": recvd_from,
+                                    "req_opts": req_opts,
+                                    "dhcp_packet": pkt,
+                                }
+                            }
+                        )
+                    except Exception as e:
+                        print("failed to send exception to raven")
+                        print_exception(e)
+
+    dhcp_handler = dhcp_packet_handler(send_packet, db_instance, production=production)
 
     REQUEUE_DELAY = 0.2  # seconds
     REQUEUE_MAX = 5  # number of attempts
@@ -893,75 +959,11 @@ def db_consumer(dbq, send_packet):
             log_packet(packet, prefix="IGN/REQFAIL:", level=dhcp.logging.ERROR)
         return success
 
-    while True:
-        # FIXME: for production, this should be in a try/except block
-        pkttype = None
-        pkt = None
-        try:
-            pkttype, pkt = dbq.get()
-            # Handle request
-            try:
-                last_retry = getattr(pkt, "last_retry", 0)
-                if (time.time() - last_retry) > REQUEUE_DELAY:
-                    dhcp_handler.handle_packet(pkt, pkttype=pkttype)
-                else:
-                    requeue(pkttype, pkt)
-            except interface.DHCPRetryError as e:
-                pkt.retry_count += 1
-
-                if pkt.retry_count <= REQUEUE_MAX:
-                    pkt.last_retry = time.time()
-                    # if queue is full, we probably want to ignore this packet anyway
-                    print("re-queueing packet for retry: %r" % e)
-                    if requeue(pkttype, pkt):
-                        log_packet(
-                            pkt, prefix="IGN/REQUEUE:", level=dhcp.logging.WARNING
-                        )
-                else:
-                    print("dropping packet after too many retries: %r" % e)
-                    log_packet(pkt, prefix="IGN/TOOMANY:", level=dhcp.logging.ERROR)
-
-        except error.NotFound as e:
-            # print_exception( e, traceback=False )
-            print("sorry, no lease found")
-            log_packet(pkt, prefix="IGN/UNAVAIL:", level=dhcp.logging.ERROR)
-            print(str(e))
-        except Exception as e:
-            print_exception(e)
-            if raven_client:
-                try:
-                    pkttype, mac, xid, client, giaddr, recvd_from, req_opts = (
-                        None,
-                    ) * 7
-                    if pkt is not None:
-                        (
-                            pkttype,
-                            mac,
-                            xid,
-                            client,
-                            giaddr,
-                            recvd_from,
-                            req_opts,
-                        ) = parse_packet(pkt)
-                    raven_client.captureException(
-                        data={
-                            "extra": {
-                                "mac": mac,
-                                "pkttype": pkttype,
-                                "xid": xid,
-                                "client": client,
-                                "giaddr": giaddr,
-                                "recvd_from": recvd_from,
-                                "req_opts": req_opts,
-                                "dhcp_packet": pkt,
-                            }
-                        }
-                    )
-                except Exception as e:
-                    print("failed to send exception to raven")
-                    print_exception(e)
-
-                # logfile.close()
+    if production:
+        while True:
+            dhcp_handler.process_pkt()
+    else:
+        return dhcp_handler
 
 
 def print_exception(exc, traceback=True):

@@ -63,12 +63,13 @@ class PacketGenerator:
     def get_random_mac(self):
         return f"aa:aa:aa:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}:{random.randrange(0, 256):02x}"
 
-    def get_gateways(self, local_gateways_only=False):
-        gateways_q = select(self.obj.networks.c.gateway)
+    def get_gateways(self, local_gateways_only=True):
+        gateways_q = select(self.obj.networks.c.gateway).where(self.obj.networks.c.gateway != None)  # noqa: E711
         if local_gateways_only:
             gateways_q = gateways_q.where(
                 self.obj.networks.c.gateway.op("<<")(dhcp.server_subnet)
             )
+        print('gateway query:', gateways_q)
         return self.__db._execute(gateways_q)
 
     def send_packet(self, packet, send_to=None, bootp=None):
@@ -107,6 +108,7 @@ class PacketGenerator:
         bound = random.random() < 0.75
 
         selected_gateway = get_rand_item(self.gateways)["gateway"]
+        print('g:', selected_gateway)
 
         if static:
             info = get_rand_item(self.statics)
